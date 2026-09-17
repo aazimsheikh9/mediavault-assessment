@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getAsset, thumbnailUrl, updateAsset } from '@/api/client';
 import { ApiError } from '@/api/errors';
 import { formatBytes, formatDate, formatDuration, statusLabel } from '@/lib/format';
@@ -35,6 +35,22 @@ interface Props {
 export function AssetDetail({ id, onClose }: Props) {
   const qc = useQueryClient();
   const [conflict, setConflict] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  // Move focus into the panel when it opens (focus the heading region), and
+  // close on Escape. Focus return to the opener is handled by the caller.
+  useEffect(() => {
+    panelRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    const node = panelRef.current;
+    node?.addEventListener('keydown', onKey);
+    return () => node?.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const {
     data: asset,
@@ -86,7 +102,13 @@ export function AssetDetail({ id, onClose }: Props) {
       : null;
 
   return (
-    <aside className="panel">
+    <aside
+      className="panel"
+      ref={panelRef}
+      tabIndex={-1}
+      role="dialog"
+      aria-label="Asset detail"
+    >
       <div className="panel__head">
         <h2>Asset detail</h2>
         <button onClick={onClose}>Close</button>

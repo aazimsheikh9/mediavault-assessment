@@ -8,27 +8,51 @@ interface Props {
   index: number;
   selected: boolean;
   active: boolean;
+  /** Roving tabindex: only the focused card is tabbable (tabIndex 0). */
+  tabbable: boolean;
   onToggleSelect: (id: string, index: number, shiftKey: boolean) => void;
   onOpen: (id: string) => void;
+  /** Keyboard navigation is owned by the grid; the card forwards its keydown. */
+  onKeyDown: (e: React.KeyboardEvent, index: number) => void;
+  /** Report focus so the grid can keep the roving index in sync. */
+  onFocus: (index: number) => void;
 }
 
 /**
  * A single grid card, memoised.
  *
- * It receives primitive `selected`/`active` booleans rather than the whole
- * `selectedIds` Set, and the callbacks are stable (useCallback in App). So
- * toggling selection on one card changes props for that card only — the other
- * cards' props are referentially identical and `memo` skips them. That is what
- * satisfies the "must not re-render the other cards" budget (defect #14).
+ * Accessibility:
+ *   - role="gridcell" inside the grid's role="grid"
+ *   - roving tabindex: exactly one card is tabbable; arrows move focus
+ *   - aria-selected reflects selection state
+ *   - the thumbnail is decorative (alt="" / aria-hidden), the name carries the
+ *     accessible label, the checkbox has its own name
+ *
+ * It receives primitive props (`selected`/`active`/`tabbable`) and stable
+ * callbacks, so toggling one card's state re-renders only that card (defect #14).
  */
-function AssetCardImpl({ asset, index, selected, active, onToggleSelect, onOpen }: Props) {
+function AssetCardImpl({
+  asset,
+  index,
+  selected,
+  active,
+  tabbable,
+  onToggleSelect,
+  onOpen,
+  onKeyDown,
+  onFocus,
+}: Props) {
   return (
     <div
+      role="gridcell"
+      aria-selected={selected}
+      aria-label={`${asset.name}, ${statusLabel(asset.status)}`}
+      tabIndex={tabbable ? 0 : -1}
+      data-card-index={index}
       className={
         'card' + (selected ? ' card--selected' : '') + (active ? ' card--active' : '')
       }
       onClick={(e) => {
-        // Shift-click anywhere on the card extends the selection range.
         if (e.shiftKey) {
           e.preventDefault();
           onToggleSelect(asset.id, index, true);
@@ -36,6 +60,8 @@ function AssetCardImpl({ asset, index, selected, active, onToggleSelect, onOpen 
           onOpen(asset.id);
         }
       }}
+      onKeyDown={(e) => onKeyDown(e, index)}
+      onFocus={() => onFocus(index)}
     >
       {asset.hasThumbnail ? (
         <img className="card__thumb" src={thumbnailUrl(asset.id)} alt="" loading="lazy" />
@@ -55,6 +81,7 @@ function AssetCardImpl({ asset, index, selected, active, onToggleSelect, onOpen 
         type="checkbox"
         className="card__check"
         checked={selected}
+        tabIndex={-1}
         aria-label={`Select ${asset.name}`}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) =>

@@ -107,6 +107,28 @@ export function useGridVirtualizer({
     if (scrollRef.current) scrollRef.current.scrollTop = value;
   }, []);
 
+  // Ensure the row containing `index` is within the viewport. Used by keyboard
+  // navigation so an arrow-key move to an off-screen card scrolls it in before
+  // we move DOM focus to it.
+  const scrollIndexIntoView = useCallback(
+    (index: number) => {
+      const el = scrollRef.current;
+      if (!el || index < 0) return;
+      const cols = Math.max(
+        1,
+        Math.floor((el.clientWidth + gap) / (minColumnWidth + gap)) || 1,
+      );
+      const row = Math.floor(index / cols);
+      const top = row * rowHeight;
+      const bottom = top + rowHeight;
+      if (top < el.scrollTop) el.scrollTop = top;
+      else if (bottom > el.scrollTop + el.clientHeight) {
+        el.scrollTop = bottom - el.clientHeight;
+      }
+    },
+    [gap, minColumnWidth, rowHeight],
+  );
+
   const virtual: VirtualWindow = {
     columns,
     totalHeight: Math.max(0, totalHeight),
@@ -125,5 +147,6 @@ export function useGridVirtualizer({
     measured,
     getScrollTop,
     setScrollTop: setScrollTopImperative,
+    scrollIndexIntoView,
   };
 }

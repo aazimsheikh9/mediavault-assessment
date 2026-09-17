@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AssetDetail } from '@/features/assets/AssetDetail';
 import { AssetGrid } from '@/features/assets/AssetGrid';
@@ -6,6 +6,7 @@ import { BulkResultBar } from '@/features/assets/BulkResultBar';
 import { useAssets } from '@/features/assets/useAssets';
 import { useBulkStatus, type BulkReport } from '@/features/assets/useBulkStatus';
 import { useSelection } from '@/features/assets/useSelection';
+import { LiveRegion } from '@/components/LiveRegion';
 import { statusLabel } from '@/lib/format';
 import { humanError } from '@/lib/errorCopy';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
@@ -99,6 +100,38 @@ export function App() {
     [selectRange, toggle, orderedIds],
   );
 
+  // Shift+arrow in the grid extends the selection range to the new focus index.
+  const onRangeTo = useCallback(
+    (index: number) => selectRange(index, orderedIds),
+    [selectRange, orderedIds],
+  );
+
+  // Remember the element that opened the panel so we can return focus on close.
+  const openerRef = useRef<HTMLElement | null>(null);
+  const openDetail = useCallback((id: string) => {
+    openerRef.current = (document.activeElement as HTMLElement) ?? null;
+    setActiveId(id);
+  }, []);
+  const closeDetail = useCallback(() => {
+    setActiveId(null);
+    // Return focus to the card that opened the panel, if it still exists.
+    const opener = openerRef.current;
+    if (opener && document.contains(opener)) opener.focus();
+    openerRef.current = null;
+  }, []);
+
+  // Live-region message: debounced result count while browsing, replaced by the
+  // latest bulk outcome or error when one happens. Debouncing avoids announcing
+  // on every keystroke.
+  const [announcement, setAnnouncement] = useState('');
+  const countMessage = isLoading
+    ? 'Loading assets'
+    : isError
+      ? humanError(error)
+      : `${total.toLocaleString()} assets match`;
+  const debouncedCountMessage = useDebouncedValue(countMessage, 600);
+  useEffect(() => setAnnouncement(debouncedCountMessage), [debouncedCountMessage]);
+
   // Discrete filter changes: push a history entry, and drop selection since the
   // visible set changes. Cursor reset is automatic — new filters = new query key.
   const toggleStatus = (s: AssetStatus, checked: boolean) => {
@@ -124,6 +157,10 @@ export function App() {
       clear();
       const result = await bulk.run(ids, next);
       setReport(result);
+      setAnnouncement(
+        `${result.appliedIds.length} moved to ${statusLabel(next).toLowerCase()}` +
+          (result.failures.length ? `, ${result.failures.length} failed` : ''),
+      );
     },
     [bulk, clear],
   );
@@ -224,7 +261,8 @@ export function App() {
           selectedIds={selected}
           activeId={activeId}
           onToggleSelect={onToggleSelect}
-          onOpen={setActiveId}
+          onOpen={openDetail}
+          onRangeTo={onRangeTo}
           isLoading={isLoading}
           isError={isError}
           errorMessage={isError ? humanError(error) : null}
@@ -232,10 +270,10 @@ export function App() {
           isFetchingNextPage={isFetchingNextPage}
           onLoadMore={fetchNextPage}
         />
-        {activeId && (
-          <AssetDetail id={activeId} onClose={() => setActiveId(null)} />
-        )}
+        {activeId && <AssetDetail id={activeId} onClose={closeDetail} />}
       </main>
+
+      <LiveRegion message={announcement} />
     </div>
   );
 }
