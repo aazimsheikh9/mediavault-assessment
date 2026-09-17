@@ -7,6 +7,7 @@ import { humanError } from '@/lib/errorCopy';
 import type { Asset, AssetStatus } from '@/lib/types';
 import { assetKeys } from './queryKeys';
 import { patchAssetInLists, replaceAsset } from './assetCache';
+import { StatusBadge } from './StatusBadge';
 
 const STATUSES: AssetStatus[] = ['draft', 'in_review', 'approved', 'archived'];
 
@@ -135,6 +136,9 @@ export function AssetDetail({ id, onClose }: Props) {
             </div>
           )}
           <h3>{asset.name}</h3>
+          <div className="panel__status">
+            <StatusBadge status={asset.status} />
+          </div>
           <dl className="facts">
             <dt>Id</dt>
             <dd>{asset.id}</dd>

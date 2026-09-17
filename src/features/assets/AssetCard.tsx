@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { thumbnailUrl } from '@/api/client';
 import { formatBytes, formatDate, statusLabel } from '@/lib/format';
 import type { Asset } from '@/lib/types';
+import { StatusBadge } from './StatusBadge';
 
 interface Props {
   asset: Asset;
@@ -72,10 +73,10 @@ function AssetCardImpl({
       )}
       <div className="card__body">
         <p className="card__name">{asset.name}</p>
-        <p className="muted">
+        <p className="muted card__meta">
           {asset.kind} · {formatBytes(asset.sizeBytes)} · {formatDate(asset.updatedAt)}
         </p>
-        <span className={`pill pill--${asset.status}`}>{statusLabel(asset.status)}</span>
+        <StatusBadge status={asset.status} />
       </div>
       <input
         type="checkbox"

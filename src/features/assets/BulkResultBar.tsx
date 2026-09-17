@@ -48,7 +48,7 @@ export function BulkResultBar({ report, busy, onRetryFailed, onUndo, onDismiss }
 
       <div className="resultbar__actions">
         {retryable.length > 0 && (
-          <button onClick={onRetryFailed} disabled={busy}>
+          <button className="btn-primary" onClick={onRetryFailed} disabled={busy}>
             Retry {retryable.length} failed
           </button>
         )}

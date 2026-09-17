@@ -229,10 +229,11 @@ export function App() {
           {STATUSES.map((s) => (
             <button
               key={s}
+              className="btn-primary"
               disabled={bulk.pending}
               onClick={() => applyBulkStatus(s, [...selected])}
             >
-              Set {statusLabel(s).toLowerCase()}
+              Move to {statusLabel(s).toLowerCase()}
             </button>
           ))}
           <button onClick={() => selectAll(orderedIds)}>Select all loaded ({items.length})</button>
