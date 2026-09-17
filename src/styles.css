@@ -394,3 +394,11 @@ button:disabled {
   background: #fff4e0;
   border-bottom: 1px solid #ecd3a2;
 }
+
+/* --- Task 4: offline banner --- */
+
+.notice--offline {
+  color: #7a4b00;
+  background: #fff4e0;
+  border-bottom: 1px solid #ecd3a2;
+}

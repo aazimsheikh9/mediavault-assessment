@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AssetDetail } from '@/features/assets/AssetDetail';
 import { AssetGrid } from '@/features/assets/AssetGrid';
 import { BulkResultBar } from '@/features/assets/BulkResultBar';
@@ -8,6 +9,7 @@ import { useSelection } from '@/features/assets/useSelection';
 import { statusLabel } from '@/lib/format';
 import { humanError } from '@/lib/errorCopy';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { useUrlState } from '@/lib/useUrlState';
 import type { AssetStatus, AssetKind, AssetQuery } from '@/lib/types';
 import type { ListFilters } from '@/features/assets/queryKeys';
@@ -78,6 +80,14 @@ export function App() {
   const [report, setReport] = useState<BulkReport | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Connectivity: show a banner while offline; on reconnect, refresh the data
+  // that may have gone stale so the user recovers without a manual reload.
+  const online = useOnlineStatus();
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (online) qc.invalidateQueries({ queryKey: ['assets'] });
+  }, [online, qc]);
+
   const orderedIds = useMemo(() => items.map((a) => a.id), [items]);
 
   // Route card selection: shift extends a range, plain click toggles one.
@@ -137,6 +147,12 @@ export function App() {
           ))}
         </select>
       </header>
+
+      {!online && (
+        <p className="notice notice--offline" role="status">
+          You’re offline. We’ve paused updates and will reconnect automatically.
+        </p>
+      )}
 
       <div className="filters">
         <fieldset className="filters__group">

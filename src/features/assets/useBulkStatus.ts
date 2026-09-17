@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { bulkSetStatus } from '@/api/client';
 import type { Asset, AssetStatus } from '@/lib/types';
+import { withRetry } from '@/api/retry';
 import { chunk, runWithConcurrency } from '@/lib/runChunked';
 import { replaceAsset, restoreStatuses, setStatusInLists, snapshotStatuses } from './assetCache';
 
@@ -69,7 +70,9 @@ export function useBulkStatus() {
         const chunks = chunk(ids, CHUNK_SIZE);
         const chunkResults = await runWithConcurrency(chunks, CONCURRENCY, async (part) => {
           try {
-            const res = await bulkSetStatus(part, status);
+            // Transient chunk failures (503/429/network) retry with backoff+jitter
+            // before we give up and mark the whole chunk as a retryable failure.
+            const res = await withRetry(() => bulkSetStatus(part, status));
             return { part, res, error: null as unknown };
           } catch (error) {
             return { part, res: null, error };

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { getAsset, thumbnailUrl, updateAsset } from '@/api/client';
-import { ApiError, isRetryable } from '@/api/errors';
+import { ApiError } from '@/api/errors';
 import { formatBytes, formatDate, formatDuration, statusLabel } from '@/lib/format';
 import { humanError } from '@/lib/errorCopy';
 import type { Asset, AssetStatus } from '@/lib/types';
@@ -44,7 +44,7 @@ export function AssetDetail({ id, onClose }: Props) {
   } = useQuery({
     queryKey: assetKeys.detail(id),
     queryFn: ({ signal }) => getAsset(id, { signal }),
-    retry: (count, err) => isRetryable(err) && count < 3,
+    // retry / retryDelay from the shared QueryClient policy (api/retry.ts).
   });
 
   const mutation = useMutation({

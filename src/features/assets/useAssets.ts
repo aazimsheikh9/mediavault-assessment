@@ -1,7 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { listAssets } from '@/api/client';
-import { isRetryable } from '@/api/errors';
 import type { Asset, AssetPage } from '@/lib/types';
 import { assetKeys, type ListFilters } from './queryKeys';
 
@@ -20,8 +19,8 @@ const PAGE_SIZE = 50; // API caps limit at 50; take the max to minimise round-tr
  *     filter is a new key, so the cursor is never reused across queries and
  *     `400 stale_cursor` cannot reach the user (#7).
  *
- * Retry here is a placeholder count; the real backoff+jitter policy arrives in
- * Task 4. We already refuse to retry non-transient errors structurally.
+ * Retry/backoff is the shared policy from api/retry.ts (exponential backoff +
+ * jitter, honours Retry-After, transient-only), configured on the QueryClient.
  */
 export function useAssets(filters: ListFilters) {
   const query = useInfiniteQuery({
@@ -30,7 +29,7 @@ export function useAssets(filters: ListFilters) {
     queryFn: ({ pageParam, signal }) =>
       listAssets({ ...filters, cursor: pageParam ?? undefined, limit: PAGE_SIZE }, { signal }),
     getNextPageParam: (lastPage: AssetPage) => lastPage.nextCursor,
-    retry: (failureCount, error) => isRetryable(error) && failureCount < 3,
+    // retry / retryDelay come from the shared QueryClient policy (api/retry.ts).
   });
 
   const items = useMemo<Asset[]>(
