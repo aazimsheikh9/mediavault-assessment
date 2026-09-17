@@ -117,5 +117,13 @@ export function useGridVirtualizer({
     gap,
   };
 
-  return { scrollRef, virtual, getScrollTop, setScrollTop: setScrollTopImperative };
+  const measured = containerWidth > 0;
+
+  return {
+    scrollRef,
+    virtual,
+    measured,
+    getScrollTop,
+    setScrollTop: setScrollTopImperative,
+  };
 }

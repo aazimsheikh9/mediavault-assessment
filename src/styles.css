@@ -143,6 +143,9 @@ button:disabled {
   overflow: hidden;
   background: var(--bg);
   cursor: pointer;
+  height: 224px;
+  display: flex;
+  flex-direction: column;
 }
 .card--selected {
   border-color: var(--accent);
@@ -154,12 +157,16 @@ button:disabled {
 .card__thumb {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 10;
+  height: 140px;
+  flex: none;
   object-fit: cover;
   background: var(--bg-soft);
 }
 .card__body {
   padding: 8px 10px 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .card__name {
   margin: 0 0 2px;
@@ -338,6 +345,10 @@ button:disabled {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+.card__thumb--placeholder {
+  height: 140px;
+  flex: none;
 }
 .panel__thumb--placeholder {
   aspect-ratio: 16 / 10;

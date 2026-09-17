@@ -48,7 +48,7 @@ export function AssetGrid({
   isFetchingNextPage,
   onLoadMore,
 }: Props) {
-  const { scrollRef, virtual } = useGridVirtualizer({
+  const { scrollRef, virtual, measured } = useGridVirtualizer({
     itemCount: assets.length,
     minColumnWidth: MIN_COL_WIDTH,
     rowHeight: ROW_HEIGHT,
@@ -87,7 +87,9 @@ export function AssetGrid({
     );
   }
 
-  const visible = assets.slice(virtual.startIndex, virtual.endIndex + 1);
+  // Until the container is measured we know neither columns nor row range, so
+  // render none rather than flashing a wrong (1-column) layout.
+  const visible = measured ? assets.slice(virtual.startIndex, virtual.endIndex + 1) : [];
 
   return (
     <div className="grid-scroll" ref={scrollRef}>
