@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { thumbnailUrl } from '@/api/client';
-import { formatBytes, formatDate, statusLabel } from '@/lib/format';
+import { useEffect } from 'react';
 import type { Asset } from '@/lib/types';
+import { AssetCard } from './AssetCard';
+import { useGridVirtualizer } from './useGridVirtualizer';
 
 interface Props {
   assets: Asset[];
@@ -17,12 +17,23 @@ interface Props {
   onLoadMore: () => void;
 }
 
+// Card box (min width) and full row height incl. the gap. Kept in sync with CSS.
+const MIN_COL_WIDTH = 220;
+const ROW_HEIGHT = 236; // card ~= 224px tall + 12px gap
+const GAP = 12;
+
 /**
- * Grid with distinct loading / empty / error states (defect #20) and an
- * IntersectionObserver sentinel that pages the infinite query.
+ * Virtualized asset grid.
  *
- * Virtualization, memoised cards and keyboard nav land in Tasks 2 and 5; this
- * step is about correctness of states and pagination wiring.
+ * Row-based virtualization (see useGridVirtualizer): we render only the rows in
+ * the viewport plus a small overscan, inside a spacer of the full scroll height.
+ * The spacer reserves space up front so paging in more assets causes no layout
+ * shift, and the rendered DOM node count is bounded by the viewport rather than
+ * by how far the user has scrolled.
+ *
+ * Prefetch: when the last rendered row is within one screen of the end of the
+ * loaded set, we ask for the next page — this replaces the DOM sentinel and
+ * works even though most rows are not in the DOM.
  */
 export function AssetGrid({
   assets,
@@ -37,31 +48,29 @@ export function AssetGrid({
   isFetchingNextPage,
   onLoadMore,
 }: Props) {
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const { scrollRef, virtual } = useGridVirtualizer({
+    itemCount: assets.length,
+    minColumnWidth: MIN_COL_WIDTH,
+    rowHeight: ROW_HEIGHT,
+    gap: GAP,
+  });
 
+  // Page in more when the rendered window approaches the end of what we have.
   useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || !hasNextPage) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && !isFetchingNextPage) onLoadMore();
-      },
-      { rootMargin: '600px' },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [hasNextPage, isFetchingNextPage, onLoadMore]);
+    if (!hasNextPage || isFetchingNextPage) return;
+    const remaining = assets.length - 1 - virtual.endIndex;
+    if (remaining <= virtual.columns * 4) onLoadMore();
+  }, [virtual.endIndex, virtual.columns, assets.length, hasNextPage, isFetchingNextPage, onLoadMore]);
 
-  // Error is its own state — never conflated with "no results".
+  // Error / loading / empty are distinct states, never conflated.
   if (isError) {
     return (
-      <div className="state state--error">
+      <div className="state state--error" role="alert">
         <p>{errorMessage ?? 'The request failed.'}</p>
         <p className="muted">This usually clears on its own. It will retry automatically.</p>
       </div>
     );
   }
-
   if (isLoading) {
     return (
       <div className="state state--loading" aria-busy="true">
@@ -69,7 +78,6 @@ export function AssetGrid({
       </div>
     );
   }
-
   if (assets.length === 0) {
     return (
       <div className="state state--empty">
@@ -79,53 +87,36 @@ export function AssetGrid({
     );
   }
 
-  return (
-    <div className="grid-scroll">
-      <div className="grid">
-        {assets.map((asset) => (
-          <div
-            key={asset.id}
-            className={
-              'card' +
-              (selectedIds.has(asset.id) ? ' card--selected' : '') +
-              (activeId === asset.id ? ' card--active' : '')
-            }
-            onClick={() => onOpen(asset.id)}
-          >
-            {asset.hasThumbnail ? (
-              <img
-                className="card__thumb"
-                src={thumbnailUrl(asset.id)}
-                alt=""
-                loading="lazy"
-              />
-            ) : (
-              <div className="card__thumb card__thumb--placeholder" aria-hidden="true">
-                {asset.kind}
-              </div>
-            )}
-            <div className="card__body">
-              <p className="card__name">{asset.name}</p>
-              <p className="muted">
-                {asset.kind} · {formatBytes(asset.sizeBytes)} · {formatDate(asset.updatedAt)}
-              </p>
-              <span className={`pill pill--${asset.status}`}>{statusLabel(asset.status)}</span>
-            </div>
-            <input
-              type="checkbox"
-              className="card__check"
-              checked={selectedIds.has(asset.id)}
-              aria-label={`Select ${asset.name}`}
-              onClick={(e) => e.stopPropagation()}
-              onChange={() => onToggleSelect(asset.id)}
-            />
-          </div>
-        ))}
-      </div>
+  const visible = assets.slice(virtual.startIndex, virtual.endIndex + 1);
 
-      <div ref={sentinelRef} className="grid__sentinel">
-        {isFetchingNextPage && <span className="muted">Loading more…</span>}
+  return (
+    <div className="grid-scroll" ref={scrollRef}>
+      {/* Spacer reserves the full height so scrollbar + layout are stable. */}
+      <div className="grid-sizer" style={{ height: virtual.totalHeight }}>
+        <div
+          className="grid"
+          style={{
+            transform: `translateY(${virtual.offsetTop}px)`,
+            gridTemplateColumns: `repeat(${virtual.columns}, minmax(0, 1fr))`,
+          }}
+        >
+          {visible.map((asset) => (
+            <AssetCard
+              key={asset.id}
+              asset={asset}
+              selected={selectedIds.has(asset.id)}
+              active={activeId === asset.id}
+              onToggleSelect={onToggleSelect}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
       </div>
+      {isFetchingNextPage && (
+        <p className="grid__more muted" aria-hidden="true">
+          Loading more…
+        </p>
+      )}
     </div>
   );
 }

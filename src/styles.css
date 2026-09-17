@@ -131,12 +131,8 @@ button:disabled {
 }
 
 .grid {
-  flex: 1;
-  overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
-  padding: 16px;
   align-content: start;
 }
 
@@ -276,9 +272,28 @@ button:disabled {
   flex: 1;
   overflow: auto;
   min-height: 0;
+  position: relative;
+}
+.grid-sizer {
+  position: relative;
+  width: 100%;
+  padding: 16px 16px 0;
+  box-sizing: border-box;
 }
 .grid-scroll .grid {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
   overflow: visible;
+  will-change: transform;
+}
+.grid__more {
+  position: sticky;
+  bottom: 0;
+  text-align: center;
+  padding: 8px;
+  background: var(--bg);
 }
 
 .filters__group {
