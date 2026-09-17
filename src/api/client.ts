@@ -1,14 +1,18 @@
 import type { Asset, AssetPage, AssetQuery, BulkResult } from '@/lib/types';
+import { ApiError, NetworkError } from './errors';
 
 /**
- * Baseline client. It works on a good network and falls apart on a bad one.
+ * HTTP client.
  *
- * Known gaps, all of which are yours to close:
- *   - no request cancellation
- *   - no retry, no backoff, no handling of Retry-After
- *   - no de-duplication of concurrent identical requests
- *   - error information is flattened into a string
- *   - callers cannot distinguish "retry this" from "do not retry this"
+ * Responsibilities kept deliberately small and explainable:
+ *   - build requests, pass through an AbortSignal for cancellation
+ *   - parse the API's `{ error: { code, message } }` envelope into a typed
+ *     `ApiError` that carries status + code + Retry-After, so callers branch
+ *     structurally rather than by string-matching
+ *   - translate a rejected fetch into a `NetworkError`
+ *
+ * Retry/backoff is intentionally NOT here — it is a policy concern layered on
+ * top in Task 4 (`withRetry`), so this stays a single round-trip primitive.
  */
 
 function toSearchParams(query: AssetQuery): string {
@@ -25,51 +29,97 @@ function toSearchParams(query: AssetQuery): string {
   return params.toString();
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(header);
+  if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
+  return null;
+}
+
+export interface RequestOptions {
+  signal?: AbortSignal;
+}
+
+async function request<T>(
+  path: string,
+  init?: RequestInit & RequestOptions,
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...init,
+      headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    });
+  } catch (err) {
+    // fetch only rejects on network-level failure or abort. Re-throw aborts
+    // untouched so callers can recognise them; wrap the rest as NetworkError.
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    throw new NetworkError('Could not reach the server.', err);
+  }
+
+  const requestId = res.headers.get('x-request-id');
+
   if (!res.ok) {
-    let detail = res.statusText;
+    let code = 'unknown';
+    let message = res.statusText || 'Request failed';
     try {
       const body = await res.json();
-      detail = body?.error?.message ?? detail;
+      code = body?.error?.code ?? code;
+      message = body?.error?.message ?? message;
     } catch {
-      /* response was not JSON */
+      /* body was not JSON */
     }
-    throw new Error(`${res.status}: ${detail}`);
+    throw new ApiError({
+      status: res.status,
+      code,
+      message,
+      retryAfterMs: parseRetryAfterMs(res.headers.get('retry-after')),
+      requestId,
+    });
   }
+
   return res.json() as Promise<T>;
 }
 
-export function listAssets(query: AssetQuery): Promise<AssetPage> {
-  return request<AssetPage>(`/api/assets?${toSearchParams(query)}`);
+export function listAssets(query: AssetQuery, opts?: RequestOptions): Promise<AssetPage> {
+  return request<AssetPage>(`/api/assets?${toSearchParams(query)}`, opts);
 }
 
-export function getAsset(id: string): Promise<Asset> {
-  return request<Asset>(`/api/assets/${id}`);
+export function getAsset(id: string, opts?: RequestOptions): Promise<Asset> {
+  return request<Asset>(`/api/assets/${id}`, opts);
 }
 
-export function getAssetsByIds(ids: string[]): Promise<{ items: Asset[]; missing: string[] }> {
-  // Note: the endpoint rejects more than 25 ids per call.
-  return request(`/api/assets/batch?ids=${ids.join(',')}`);
+export function getAssetsByIds(
+  ids: string[],
+  opts?: RequestOptions,
+): Promise<{ items: Asset[]; missing: string[] }> {
+  // The endpoint rejects more than 25 ids per call; chunking is the caller's job.
+  return request(`/api/assets/batch?ids=${ids.join(',')}`, opts);
 }
 
 export function updateAsset(
   id: string,
   version: number,
   patch: Partial<Pick<Asset, 'name' | 'status' | 'tags'>>,
+  opts?: RequestOptions,
 ): Promise<Asset> {
   return request<Asset>(`/api/assets/${id}`, {
+    ...opts,
     method: 'PATCH',
     body: JSON.stringify({ version, patch }),
   });
 }
 
-export function bulkSetStatus(ids: string[], status: Asset['status']): Promise<BulkResult> {
-  // Note: the endpoint rejects more than 50 ids per call.
+export function bulkSetStatus(
+  ids: string[],
+  status: Asset['status'],
+  opts?: RequestOptions,
+): Promise<BulkResult> {
+  // The endpoint rejects more than 50 ids per call; chunking is the caller's job.
   return request<BulkResult>('/api/assets/bulk-status', {
+    ...opts,
     method: 'POST',
     body: JSON.stringify({ ids, status }),
   });

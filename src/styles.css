@@ -269,3 +269,69 @@ button:disabled {
     border-top: 1px solid var(--line);
   }
 }
+
+/* --- Task 1: distinct states, filter groups, thumbnail placeholders --- */
+
+.grid-scroll {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.grid-scroll .grid {
+  overflow: visible;
+}
+
+.filters__group {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+.filters__group legend {
+  float: none;
+  padding: 0 6px 0 0;
+}
+.filters__count {
+  margin-left: auto;
+}
+
+.state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 48px 16px;
+  text-align: center;
+}
+.state--error {
+  color: var(--danger);
+}
+.state--error .muted {
+  color: var(--ink-soft);
+}
+
+.card__thumb--placeholder,
+.panel__thumb--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.panel__thumb--placeholder {
+  aspect-ratio: 16 / 10;
+}
+
+.grid__sentinel {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}

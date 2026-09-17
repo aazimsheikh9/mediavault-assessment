@@ -55,7 +55,13 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
 
       {asset && (
         <div className="panel__body">
-          <img className="panel__thumb" src={thumbnailUrl(asset.id)} alt="" />
+          {asset.hasThumbnail ? (
+            <img className="panel__thumb" src={thumbnailUrl(asset.id)} alt="" />
+          ) : (
+            <div className="panel__thumb panel__thumb--placeholder" aria-hidden="true">
+              {asset.kind}
+            </div>
+          )}
           <h3>{asset.name}</h3>
           <dl className="facts">
             <dt>Id</dt>
