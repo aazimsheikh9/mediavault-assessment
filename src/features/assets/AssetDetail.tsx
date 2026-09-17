@@ -1,47 +1,89 @@
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { getAsset, thumbnailUrl, updateAsset } from '@/api/client';
+import { ApiError, isRetryable } from '@/api/errors';
 import { formatBytes, formatDate, formatDuration, statusLabel } from '@/lib/format';
+import { humanError } from '@/lib/errorCopy';
 import type { Asset, AssetStatus } from '@/lib/types';
+import { assetKeys } from './queryKeys';
+import { patchAssetInLists, replaceAsset } from './assetCache';
 
 const STATUSES: AssetStatus[] = ['draft', 'in_review', 'approved', 'archived'];
 
 interface Props {
   id: string;
   onClose: () => void;
-  onSaved: (asset: Asset) => void;
 }
 
 /**
- * Baseline detail panel. Loads on open, saves with no optimistic update,
- * surfaces failures as raw strings, and does nothing about focus.
+ * Detail panel.
+ *
+ * - Loads the asset with its own cached query (dedupes with the list).
+ * - Status change is optimistic: we write the new status into the detail and
+ *   list caches immediately, then confirm with the server.
+ * - `409 version_conflict` is handled deliberately (see below), not shown raw.
+ *
+ * 409 policy (justified): the API rejects a PATCH whose `version` is stale, so a
+ * blind overwrite is impossible and a silent one would discard whoever edited
+ * the row. We refetch the current asset, roll back the optimistic change, keep
+ * the panel open, and tell the user it changed underneath them so they can
+ * re-apply against the fresh version if they still want to. This preserves the
+ * other person's write and the user's intent, and never loses data silently.
+ *
+ * Focus management (move-in / Escape / return) is added in Task 5.
  */
-export function AssetDetail({ id, onClose, onSaved }: Props) {
-  const [asset, setAsset] = useState<Asset | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+export function AssetDetail({ id, onClose }: Props) {
+  const qc = useQueryClient();
+  const [conflict, setConflict] = useState(false);
 
-  useEffect(() => {
-    setAsset(null);
-    setError(null);
-    getAsset(id)
-      .then(setAsset)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Load failed'));
-  }, [id]);
+  const {
+    data: asset,
+    isPending,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: assetKeys.detail(id),
+    queryFn: ({ signal }) => getAsset(id, { signal }),
+    retry: (count, err) => isRetryable(err) && count < 3,
+  });
 
-  async function setStatus(status: AssetStatus) {
-    if (!asset) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const updated = await updateAsset(asset.id, asset.version, { status });
-      setAsset(updated);
-      onSaved(updated);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
-    } finally {
-      setSaving(false);
-    }
-  }
+  const mutation = useMutation({
+    mutationFn: (vars: { version: number; status: AssetStatus }) =>
+      updateAsset(id, vars.version, { status: vars.status }),
+    onMutate: async (vars) => {
+      setConflict(false);
+      await qc.cancelQueries({ queryKey: assetKeys.detail(id) });
+      const prev = qc.getQueryData<Asset>(assetKeys.detail(id));
+      if (prev) {
+        // optimistic: update detail + every list that shows this asset
+        qc.setQueryData<Asset>(assetKeys.detail(id), { ...prev, status: vars.status });
+        patchAssetInLists(qc, id, { status: vars.status });
+      }
+      return { prev };
+    },
+    onError: async (err, _vars, ctx) => {
+      // roll back the optimistic change
+      if (ctx?.prev) {
+        qc.setQueryData<Asset>(assetKeys.detail(id), ctx.prev);
+        patchAssetInLists(qc, id, { status: ctx.prev.status });
+      }
+      if (err instanceof ApiError && err.code === 'version_conflict') {
+        setConflict(true);
+        // refetch the truth so the panel shows the current version/status
+        await qc.invalidateQueries({ queryKey: assetKeys.detail(id) });
+      }
+    },
+    onSuccess: (updated) => {
+      // trust the server's version-bumped asset everywhere
+      replaceAsset(qc, updated);
+    },
+  });
+
+  const saving = mutation.isPending;
+  const saveError =
+    mutation.error && !(mutation.error instanceof ApiError && mutation.error.code === 'version_conflict')
+      ? humanError(mutation.error)
+      : null;
 
   return (
     <aside className="panel">
@@ -50,8 +92,16 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
         <button onClick={onClose}>Close</button>
       </div>
 
-      {error && <p className="error">{error}</p>}
-      {!asset && !error && <p className="muted">Loading…</p>}
+      {isError && <p className="error">{humanError(error)}</p>}
+      {isPending && !isError && <p className="muted">Loading…</p>}
+
+      {conflict && (
+        <p className="notice notice--warn">
+          This asset was changed by someone else. We’ve loaded the latest — re-apply
+          your change if you still want it.
+        </p>
+      )}
+      {saveError && <p className="error">{saveError}</p>}
 
       {asset && (
         <div className="panel__body">
@@ -70,7 +120,7 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
             <dd>{asset.kind}</dd>
             <dt>Size</dt>
             <dd>{formatBytes(asset.sizeBytes)}</dd>
-            {asset.width && (
+            {asset.width != null && (
               <>
                 <dt>Dimensions</dt>
                 <dd>
@@ -78,7 +128,7 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
                 </dd>
               </>
             )}
-            {asset.durationSec && (
+            {asset.durationSec != null && (
               <>
                 <dt>Duration</dt>
                 <dd>{formatDuration(asset.durationSec)}</dd>
@@ -102,13 +152,13 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
 
           <p className="muted">Status</p>
           <div className="row">
-            {STATUSES.map((status) => (
+            {STATUSES.map((s) => (
               <button
-                key={status}
-                disabled={saving || status === asset.status}
-                onClick={() => setStatus(status)}
+                key={s}
+                disabled={saving || s === asset.status}
+                onClick={() => mutation.mutate({ version: asset.version, status: s })}
               >
-                {statusLabel(status)}
+                {statusLabel(s)}
               </button>
             ))}
           </div>

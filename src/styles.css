@@ -361,3 +361,36 @@ button:disabled {
   justify-content: center;
   padding: 8px;
 }
+
+/* --- Task 3: bulk result bar + conflict notice --- */
+
+.resultbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+.resultbar__summary {
+  font-size: 14px;
+}
+.resultbar__failed {
+  color: var(--danger);
+}
+.resultbar__detail {
+  margin: 0;
+  width: 100%;
+}
+.resultbar__actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.notice--warn {
+  color: #7a4b00;
+  background: #fff4e0;
+  border-bottom: 1px solid #ecd3a2;
+}

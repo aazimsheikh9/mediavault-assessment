@@ -7,7 +7,7 @@ interface Props {
   assets: Asset[];
   selectedIds: Set<string>;
   activeId: string | null;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: (id: string, index: number, shiftKey: boolean) => void;
   onOpen: (id: string) => void;
   isLoading: boolean;
   isError: boolean;
@@ -102,10 +102,11 @@ export function AssetGrid({
             gridTemplateColumns: `repeat(${virtual.columns}, minmax(0, 1fr))`,
           }}
         >
-          {visible.map((asset) => (
+          {visible.map((asset, i) => (
             <AssetCard
               key={asset.id}
               asset={asset}
+              index={virtual.startIndex + i}
               selected={selectedIds.has(asset.id)}
               active={activeId === asset.id}
               onToggleSelect={onToggleSelect}

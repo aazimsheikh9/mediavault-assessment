@@ -5,9 +5,10 @@ import type { Asset } from '@/lib/types';
 
 interface Props {
   asset: Asset;
+  index: number;
   selected: boolean;
   active: boolean;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: (id: string, index: number, shiftKey: boolean) => void;
   onOpen: (id: string) => void;
 }
 
@@ -20,13 +21,21 @@ interface Props {
  * cards' props are referentially identical and `memo` skips them. That is what
  * satisfies the "must not re-render the other cards" budget (defect #14).
  */
-function AssetCardImpl({ asset, selected, active, onToggleSelect, onOpen }: Props) {
+function AssetCardImpl({ asset, index, selected, active, onToggleSelect, onOpen }: Props) {
   return (
     <div
       className={
         'card' + (selected ? ' card--selected' : '') + (active ? ' card--active' : '')
       }
-      onClick={() => onOpen(asset.id)}
+      onClick={(e) => {
+        // Shift-click anywhere on the card extends the selection range.
+        if (e.shiftKey) {
+          e.preventDefault();
+          onToggleSelect(asset.id, index, true);
+        } else {
+          onOpen(asset.id);
+        }
+      }}
     >
       {asset.hasThumbnail ? (
         <img className="card__thumb" src={thumbnailUrl(asset.id)} alt="" loading="lazy" />
@@ -48,7 +57,9 @@ function AssetCardImpl({ asset, selected, active, onToggleSelect, onOpen }: Prop
         checked={selected}
         aria-label={`Select ${asset.name}`}
         onClick={(e) => e.stopPropagation()}
-        onChange={() => onToggleSelect(asset.id)}
+        onChange={(e) =>
+          onToggleSelect(asset.id, index, (e.nativeEvent as MouseEvent).shiftKey)
+        }
       />
     </div>
   );

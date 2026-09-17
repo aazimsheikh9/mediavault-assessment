@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { bulkSetStatus } from '@/api/client';
 import { AssetDetail } from '@/features/assets/AssetDetail';
 import { AssetGrid } from '@/features/assets/AssetGrid';
+import { BulkResultBar } from '@/features/assets/BulkResultBar';
 import { useAssets } from '@/features/assets/useAssets';
+import { useBulkStatus, type BulkReport } from '@/features/assets/useBulkStatus';
+import { useSelection } from '@/features/assets/useSelection';
 import { statusLabel } from '@/lib/format';
 import { humanError } from '@/lib/errorCopy';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
@@ -70,46 +72,51 @@ export function App() {
     fetchNextPage,
   } = useAssets(filters);
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const { selected, toggle, selectRange, selectAll, clear } = useSelection();
+  const bulk = useBulkStatus();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [report, setReport] = useState<BulkReport | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const orderedIds = useMemo(() => items.map((a) => a.id), [items]);
+
+  // Route card selection: shift extends a range, plain click toggles one.
+  const onToggleSelect = useCallback(
+    (id: string, index: number, shiftKey: boolean) => {
+      if (shiftKey) selectRange(index, orderedIds);
+      else toggle(id, index);
+    },
+    [selectRange, toggle, orderedIds],
+  );
 
   // Discrete filter changes: push a history entry, and drop selection since the
   // visible set changes. Cursor reset is automatic — new filters = new query key.
   const toggleStatus = (s: AssetStatus, checked: boolean) => {
+    clear();
     const next = checked ? [...status, s] : status.filter((x) => x !== s);
     setUrl({ status: next.join(',') }, 'push');
   };
   const toggleKind = (k: AssetKind, checked: boolean) => {
+    clear();
     const next = checked ? [...kind, k] : kind.filter((x) => x !== k);
     setUrl({ kind: next.join(',') }, 'push');
   };
   const changeSort = (value: NonNullable<AssetQuery['sort']>) => {
+    clear();
     setUrl({ sort: value === DEFAULT_SORT ? '' : value }, 'push');
   };
 
-  // Interim bulk apply — real chunking + partial-failure handling lands in Task 3.
-  async function applyBulkStatus(next: AssetStatus) {
-    const ids = [...selectedIds];
-    if (ids.length === 0) return;
-    setNotice(null);
-    try {
-      const result = await bulkSetStatus(ids.slice(0, 50), next);
-      setNotice(`${result.applied} updated, ${result.failed} failed.`);
-      setSelectedIds(new Set());
-    } catch (err) {
-      setNotice(humanError(err));
-    }
-  }
+  const applyBulkStatus = useCallback(
+    async (next: AssetStatus, ids: string[]) => {
+      if (ids.length === 0) return;
+      setNotice(null);
+      setReport(null);
+      clear();
+      const result = await bulk.run(ids, next);
+      setReport(result);
+    },
+    [bulk, clear],
+  );
 
   return (
     <div className="app">
@@ -163,16 +170,34 @@ export function App() {
         </span>
       </div>
 
-      {selectedIds.size > 0 && (
+      {selected.size > 0 && (
         <div className="bulkbar">
-          <span>{selectedIds.size} selected</span>
+          <span>{selected.size} selected</span>
           {STATUSES.map((s) => (
-            <button key={s} onClick={() => applyBulkStatus(s)}>
+            <button
+              key={s}
+              disabled={bulk.pending}
+              onClick={() => applyBulkStatus(s, [...selected])}
+            >
               Set {statusLabel(s).toLowerCase()}
             </button>
           ))}
-          <button onClick={() => setSelectedIds(new Set())}>Clear selection</button>
+          <button onClick={() => selectAll(orderedIds)}>Select all loaded ({items.length})</button>
+          <button onClick={clear}>Clear selection</button>
         </div>
+      )}
+
+      {report && (
+        <BulkResultBar
+          report={report}
+          busy={bulk.pending}
+          onRetryFailed={() => applyBulkStatus(report.status, report.retryableIds)}
+          onUndo={() => {
+            bulk.undo(report);
+            setReport(null);
+          }}
+          onDismiss={() => setReport(null)}
+        />
       )}
 
       {notice && <p className="notice">{notice}</p>}
@@ -180,9 +205,9 @@ export function App() {
       <main className="content">
         <AssetGrid
           assets={items}
-          selectedIds={selectedIds}
+          selectedIds={selected}
           activeId={activeId}
-          onToggleSelect={toggleSelect}
+          onToggleSelect={onToggleSelect}
           onOpen={setActiveId}
           isLoading={isLoading}
           isError={isError}
@@ -192,7 +217,7 @@ export function App() {
           onLoadMore={fetchNextPage}
         />
         {activeId && (
-          <AssetDetail id={activeId} onClose={() => setActiveId(null)} onSaved={() => undefined} />
+          <AssetDetail id={activeId} onClose={() => setActiveId(null)} />
         )}
       </main>
     </div>
