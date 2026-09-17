@@ -320,13 +320,13 @@ button:disabled {
 }
 
 .state {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
   padding: 48px 16px;
+  min-height: 100%;
   text-align: center;
 }
 .state--error {

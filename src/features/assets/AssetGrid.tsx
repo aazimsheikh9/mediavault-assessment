@@ -62,59 +62,57 @@ export function AssetGrid({
     if (remaining <= virtual.columns * 4) onLoadMore();
   }, [virtual.endIndex, virtual.columns, assets.length, hasNextPage, isFetchingNextPage, onLoadMore]);
 
-  // Error / loading / empty are distinct states, never conflated.
-  if (isError) {
-    return (
-      <div className="state state--error" role="alert">
-        <p>{errorMessage ?? 'The request failed.'}</p>
-        <p className="muted">This usually clears on its own. It will retry automatically.</p>
-      </div>
-    );
-  }
-  if (isLoading) {
-    return (
-      <div className="state state--loading" aria-busy="true">
-        <p className="muted">Loading assets…</p>
-      </div>
-    );
-  }
-  if (assets.length === 0) {
-    return (
-      <div className="state state--empty">
-        <p>Nothing matches these filters.</p>
-        <p className="muted">Clear the search box or widen the status filter.</p>
-      </div>
-    );
-  }
-
   // Until the container is measured we know neither columns nor row range, so
   // render none rather than flashing a wrong (1-column) layout.
   const visible = measured ? assets.slice(virtual.startIndex, virtual.endIndex + 1) : [];
 
+  // The scroll container is ALWAYS mounted so the virtualizer's ref stays
+  // attached and measured across loading/loaded transitions. Distinct states
+  // render as overlays inside it — never by swapping the container out, which
+  // previously reset the measurement and left the grid blank after a filter
+  // change even though items had arrived.
+  const overlay = isError ? (
+    <div className="state state--error" role="alert">
+      <p>{errorMessage ?? 'The request failed.'}</p>
+      <p className="muted">This usually clears on its own. It will retry automatically.</p>
+    </div>
+  ) : isLoading ? (
+    <div className="state state--loading" aria-busy="true">
+      <p className="muted">Loading assets…</p>
+    </div>
+  ) : assets.length === 0 ? (
+    <div className="state state--empty">
+      <p>Nothing matches these filters.</p>
+      <p className="muted">Clear the search box or widen the status filter.</p>
+    </div>
+  ) : null;
+
   return (
     <div className="grid-scroll" ref={scrollRef}>
-      {/* Spacer reserves the full height so scrollbar + layout are stable. */}
-      <div className="grid-sizer" style={{ height: virtual.totalHeight }}>
-        <div
-          className="grid"
-          style={{
-            transform: `translateY(${virtual.offsetTop}px)`,
-            gridTemplateColumns: `repeat(${virtual.columns}, minmax(0, 1fr))`,
-          }}
-        >
-          {visible.map((asset, i) => (
-            <AssetCard
-              key={asset.id}
-              asset={asset}
-              index={virtual.startIndex + i}
-              selected={selectedIds.has(asset.id)}
-              active={activeId === asset.id}
-              onToggleSelect={onToggleSelect}
-              onOpen={onOpen}
-            />
-          ))}
+      {overlay}
+      {!overlay && (
+        <div className="grid-sizer" style={{ height: virtual.totalHeight }}>
+          <div
+            className="grid"
+            style={{
+              transform: `translateY(${virtual.offsetTop}px)`,
+              gridTemplateColumns: `repeat(${virtual.columns}, minmax(0, 1fr))`,
+            }}
+          >
+            {visible.map((asset, i) => (
+              <AssetCard
+                key={asset.id}
+                asset={asset}
+                index={virtual.startIndex + i}
+                selected={selectedIds.has(asset.id)}
+                active={activeId === asset.id}
+                onToggleSelect={onToggleSelect}
+                onOpen={onOpen}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       {isFetchingNextPage && (
         <p className="grid__more muted" aria-hidden="true">
           Loading more…
