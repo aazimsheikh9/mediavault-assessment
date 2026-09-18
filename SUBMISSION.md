@@ -27,7 +27,11 @@ No environment variables or extra services needed. `npm run build` and
 
 Nothing in `server/` or `API.md` was changed.
 
-**Deployed link:** _(Render URL — to be added once the service is live)_
+**Deployed link:** https://mediavault-assessment-lz0k.onrender.com/
+
+> On Render's free tier the service sleeps after ~15 min idle, so the first visit
+> after a while can take ~30–50s to wake (cold start). It is fast once awake, and
+> chaos + latency are on, as it will be graded.
 
 The mock API in `server/` is a stateful in-memory Node server (12,400 assets,
 chaos, rate limiting, SSE), so it cannot run as a stateless serverless function.
