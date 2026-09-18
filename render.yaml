@@ -1,0 +1,12 @@
+# Render blueprint: one web service that builds the SPA and runs the mock API
+# behind a thin front server (server-prod.mjs). Chaos + latency stay on.
+services:
+  - type: web
+    name: mediavault-assessment
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.19.0

@@ -27,13 +27,15 @@ No environment variables or extra services needed. `npm run build` and
 
 Nothing in `server/` or `API.md` was changed.
 
-**On the deployed link.** The app depends on the mock API in `server/`, which is a
-stateful in-memory Node server (12,400 assets, chaos, rate limiting). A static
-host cannot run it, and standing up a persistent full-stack deploy added
-configuration risk for an item the brief marks as "appreciated" rather than
-required. I chose to keep that effort on the required paths and the video instead.
-The app runs correctly from a clean clone with `npm run dev` (chaos on), which is
-the stated requirement.
+**Deployed link:** _(Render URL — to be added once the service is live)_
+
+The mock API in `server/` is a stateful in-memory Node server (12,400 assets,
+chaos, rate limiting, SSE), so it cannot run as a stateless serverless function.
+Rather than modify it, the deploy runs it unchanged on an internal port behind a
+thin front server (`server-prod.mjs`, outside `server/`) that serves the built
+SPA and proxies `/api` to it — one persistent process on Render. Chaos and latency
+stay **on**, so the deployed app behaves the way it will be graded. Locally,
+`npm run dev` is unchanged.
 
 ## Time spent
 
