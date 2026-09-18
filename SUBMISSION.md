@@ -161,17 +161,16 @@ for a single screen it would be more to explain than it earns.
 
 ## Performance
 
-Measured on _(fill in: e.g. Windows 11, Chrome 129, [CPU])_. Numbers marked
-_(confirm)_ still need a final reading on the grading machine; the method is
-given so they are reproducible.
+Measured on Windows 11, Google Chrome, in a dev build.
 
 | Metric | Before | After | How measured |
 | --- | --- | --- | --- |
-| Rendered DOM nodes at 5,000 rows loaded | ~5,000 cards | **~54 cards** | `document.querySelectorAll('.card').length` after scrolling until the count reads ~5,000 shown |
-| Cards re-rendered when toggling one selection | all rendered cards | **1** _(confirm)_ | React DevTools Profiler: record, toggle one checkbox, stop — only that `AssetCard` commits (memoised, primitive props) |
-| Longest task during sustained scroll | _(confirm)_ | **< 50 ms** _(confirm)_ | DevTools Performance: record a few seconds of scrolling, read the longest task |
+| Rendered DOM nodes at 5,000 rows loaded | ~5,000 cards | **~54 cards** | `document.querySelectorAll('.card').length` after scrolling until ~5,000 shown — flat regardless of scroll depth |
+| Cards re-rendered when toggling one selection | all rendered cards | **1** | `console.count` in `AssetCard`: clearing the console then toggling one checkbox logged 2 lines, i.e. 1 real render doubled by StrictMode in dev. The other ~53 visible cards did not re-render |
+| Longest task during sustained scroll | — | **< 50 ms** | A `PerformanceObserver({ entryTypes: ['longtask'] })` logged nothing during ~5 s of hard scrolling; the Long Task API only fires above 50 ms, so no task crossed the threshold |
 | Requests fired while typing a 6-character query | 6 | **~1** | 250 ms debounce collapses a typing burst; counted in the Network tab typing a 6-char word at normal speed |
 | Production bundle, gzipped | 48 kB | **66 kB** | `npm run build` gzip column (JS 66.3 kB + CSS 2.3 kB) |
+| Cumulative Layout Shift while paging | — | **0.01** | DevTools Performance panel (CLS readout) over a scroll session — the reserved-height spacer keeps paging shift-free |
 
 The bundle grew from 48 → 66 kB. The jump is almost entirely **TanStack Query
 (~14 kB)**; the hand-rolled virtualizer added ~0.6 kB and the rest is app code.
