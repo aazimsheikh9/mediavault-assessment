@@ -27,6 +27,14 @@ No environment variables or extra services needed. `npm run build` and
 
 Nothing in `server/` or `API.md` was changed.
 
+**On the deployed link.** The app depends on the mock API in `server/`, which is a
+stateful in-memory Node server (12,400 assets, chaos, rate limiting). A static
+host cannot run it, and standing up a persistent full-stack deploy added
+configuration risk for an item the brief marks as "appreciated" rather than
+required. I chose to keep that effort on the required paths and the video instead.
+The app runs correctly from a clean clone with `npm run dev` (chaos on), which is
+the stated requirement.
+
 ## Time spent
 
 Roughly 12 hours, split about: 1h reading the brief/API and writing the defect
